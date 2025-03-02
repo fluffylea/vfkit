@@ -73,6 +73,29 @@ type VirtioFs struct {
 	SharedDir string `json:"sharedDir"`
 }
 
+// BlockDevice configures a shared block device.
+type BlockDevice struct {
+	DiskStorageConfig
+}
+
+func (dev *BlockDevice) FromOptions(options []option) error {
+	unhandledOpts := []option{}
+	for _, option := range options {
+		switch option.key {
+		case "path":
+			dev.ImagePath = option.value
+		default:
+			unhandledOpts = append(unhandledOpts, option)
+		}
+	}
+
+	return dev.DiskStorageConfig.FromOptions(unhandledOpts)
+}
+
+func (dev *BlockDevice) ToCmdLine() ([]string, error) {
+	return []string{"--device", fmt.Sprintf("block-device,path=%s", dev.ImagePath)}, nil
+}
+
 // RosettaShare configures rosetta support in the guest to run Intel binaries on Apple CPUs
 type RosettaShare struct {
 	DirectorySharingConfig
@@ -183,6 +206,8 @@ func deviceFromCmdLine(deviceOpts string) (VirtioDevice, error) {
 		dev = nvmExpressControllerNewEmpty()
 	case "virtio-blk":
 		dev = virtioBlkNewEmpty()
+	case "block-device":
+		dev = blockDeviceEmpty()
 	case "virtio-fs":
 		dev = &VirtioFs{}
 	case "virtio-net":
@@ -521,6 +546,16 @@ func virtioBlkNewEmpty() *VirtioBlk {
 			},
 		},
 		DeviceIdentifier: "",
+	}
+}
+
+func blockDeviceEmpty() *BlockDevice {
+	return &BlockDevice{
+		DiskStorageConfig: DiskStorageConfig{
+			StorageConfig: StorageConfig{
+				DevName: "block-device",
+			},
+		},
 	}
 }
 

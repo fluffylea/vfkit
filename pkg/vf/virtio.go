@@ -29,6 +29,7 @@ type VirtioInput config.VirtioInput
 type VirtioGPU config.VirtioGPU
 type VirtioBalloon config.VirtioBalloon
 type NetworkBlockDevice config.NetworkBlockDevice
+type BlockDevice config.BlockDevice
 
 type vzNetworkBlockDevice struct {
 	*vz.VirtioBlockDeviceConfiguration
@@ -87,6 +88,42 @@ func (dev *VirtioBlk) AddToVirtualMachineConfig(vmConfig *VirtualMachineConfigur
 		return err
 	}
 	log.Infof("Adding virtio-blk device (imagePath: %s)", dev.ImagePath)
+	vmConfig.storageDevicesConfiguration = append(vmConfig.storageDevicesConfiguration, storageDeviceConfig)
+
+	return nil
+}
+
+func (dev *BlockDevice) toVz() (vz.StorageDeviceConfiguration, error) {
+	var storageConfig DiskStorageConfig = DiskStorageConfig(dev.DiskStorageConfig)
+
+	var openMode int
+	if dev.ReadOnly {
+		openMode = os.O_RDONLY
+	} else {
+		openMode = os.O_RDWR
+	}
+
+	file, err := os.OpenFile(storageConfig.ImagePath, openMode, 0600)
+	if err != nil {
+		return nil, err
+	}
+	attachment, err := vz.NewDiskBlockDeviceStorageDeviceAttachment(file, storageConfig.ReadOnly, vz.DiskSynchronizationModeFull)
+	if err != nil {
+		return nil, err
+	}
+	blockDeviceConfiguration, err := vz.NewVirtioBlockDeviceConfiguration(attachment)
+	if err != nil {
+		return nil, err
+	}
+	return blockDeviceConfiguration, nil
+}
+
+func (dev *BlockDevice) AddToVirtualMachineConfig(vmConfig *VirtualMachineConfiguration) error {
+	storageDeviceConfig, err := dev.toVz()
+	if err != nil {
+		return err
+	}
+	log.Infof("Adding block device (path: %s)", dev.ImagePath)
 	vmConfig.storageDevicesConfiguration = append(vmConfig.storageDevicesConfiguration, storageDeviceConfig)
 
 	return nil
@@ -421,6 +458,8 @@ func AddToVirtualMachineConfig(vmConfig *VirtualMachineConfiguration, dev config
 		return (*USBMassStorage)(d).AddToVirtualMachineConfig(vmConfig)
 	case *config.VirtioBlk:
 		return (*VirtioBlk)(d).AddToVirtualMachineConfig(vmConfig)
+	case *config.BlockDevice:
+		return (*BlockDevice)(d).AddToVirtualMachineConfig(vmConfig)
 	case *config.RosettaShare:
 		return (*RosettaShare)(d).AddToVirtualMachineConfig(vmConfig)
 	case *config.NVMExpressController:

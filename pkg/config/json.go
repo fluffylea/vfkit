@@ -31,6 +31,7 @@ const (
 	rosetta        vmComponentKind = "rosetta"
 	ignition       vmComponentKind = "ignition"
 	vfNbd          vmComponentKind = "nbd"
+	blkDevice      vmComponentKind = "block-device"
 )
 
 type jsonKind struct {
@@ -138,6 +139,10 @@ func unmarshalDevice(rawMsg json.RawMessage) (VirtioDevice, error) {
 		dev, err = unmarshalVirtioNet(rawMsg)
 	case vfVsock:
 		var newDevice VirtioVsock
+		err = json.Unmarshal(rawMsg, &newDevice)
+		dev = &newDevice
+	case blkDevice:
+		var newDevice BlockDevice
 		err = json.Unmarshal(rawMsg, &newDevice)
 		dev = &newDevice
 	case vfBlk:
@@ -293,6 +298,17 @@ func (dev *VirtioVsock) MarshalJSON() ([]byte, error) {
 	return json.Marshal(devWithKind{
 		jsonKind:    kind(vfVsock),
 		VirtioVsock: *dev,
+	})
+}
+
+func (dev *BlockDevice) MarshalJSON() ([]byte, error) {
+	type devWithKind struct {
+		jsonKind
+		BlockDevice
+	}
+	return json.Marshal(devWithKind{
+		jsonKind:    kind(blkDevice),
+		BlockDevice: *dev,
 	})
 }
 
